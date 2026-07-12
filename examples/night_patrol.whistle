@@ -1,0 +1,11 @@
+# Night Patrol — lightweight overnight monitor
+# Low-cost model, daily summary, alarms only.
+
+whistle night_patrol {
+    breed: "claude-3-haiku",
+    pasture: "overnight-watch",
+    fence: "conservation/minimal.bin",
+    herd: "system-logs",
+    rotate: every_day_at_02:00,
+    recall: on_alarm
+}
