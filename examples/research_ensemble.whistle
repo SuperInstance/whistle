@@ -1,0 +1,22 @@
+# Research Ensemble — multi-model research assistant
+# Uses two breeds in stock ratio for cross-checking.
+
+whistle research_crosscheck {
+    breed: "gemini-1.5-pro",
+    pasture: "research-lab",
+    herd: "academic-papers",
+    rotate: every_2_hours,
+    recall: on_budget,
+    stock: "3:1",
+    flank: "citation-checker",
+    drive: "outbound"
+}
+
+whistle research_verifier {
+    breed: "claude-3-sonnet",
+    pasture: "research-lab",
+    herd: "academic-papers",
+    rotate: every_2_hours,
+    recall: on_budget,
+    drive: "inbound"
+}
