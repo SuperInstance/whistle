@@ -24,6 +24,11 @@ classifiers = [
     "Topic :: Software Development :: Compilers",
 ]
 
+[project.urls]
+Homepage = "https://github.com/SuperInstance/whistle"
+Repository = "https://github.com/SuperInstance/whistle"
+Issues = "https://github.com/SuperInstance/whistle/issues"
+
 [project.optional-dependencies]
 dev = ["pytest>=7.0", "pytest-cov"]
 
