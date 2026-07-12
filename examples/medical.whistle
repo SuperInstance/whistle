@@ -1,0 +1,11 @@
+# Medical Records Round-Up
+# A working dog that rounds up medical records for review.
+
+whistle round_up_medical {
+    breed: "gpt-4",
+    pasture: "medical-review",
+    fence: "conservation/budget_decay.bin",
+    herd: "medical-records",
+    rotate: every_30_min,
+    recall: on_alarm
+}
