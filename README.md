@@ -1,277 +1,238 @@
 # Whistle — Intent DSL for Working Animal Architecture
 
-> Replaces system-prompt sprawl with structured, compiled commands.
+> Replaces system-prompt sprawl with structured, compiled commands. The shepherd's language for the flock.
 
-In the working-dog paradigm, a shepherd communicates with dogs using whistle cues — short, precise signals that carry complete instructions. **Whistle** brings the same discipline to LLM orchestration: instead of 500-word system prompt paragraphs that are impossible to validate or version, you write declarative `.whistle` files that compile into the configs your infrastructure already expects.
+[![Python](https://img.shields.io/python/required-version-toml?toml=pyproject.toml)](https://python.org)
+[![License](https://img.shields.io/github/license/SuperInstance/whistle)](LICENSE)
+[![Tests](https://img.shields.io/badge/tests-passing-brightgreen)](tests/)
 
-## Why It Exists
+System prompts are the assembly language of LLM orchestration — verbose, unstructured, and impossible to validate. A 500-word paragraph telling a model how to behave is the state of the art, and it's not good enough. Whistle replaces this with a declarative DSL: seven lines of structured configuration that compile down to the infrastructure configs your system already understands. You write a whistle program; the compiler produces PLATO room configs, conservation fence policies, flux registry entries, and schedule triggers.
 
-System prompts are the assembly language of LLM ops — verbose, unstructured, untestable. You copy-paste them between scripts, tweak them by hand, and hope nothing breaks. Whistle gives you:
+## What It Does
 
-- **Declarative syntax** — describe *what* the working animal should do, not *how* in prose
-- **Validation** — referential integrity checks before deployment, not at runtime
-- **Compilation** — a single `.whistle` file produces configs for PLATO rooms, conservation fences, flux routing, schedules, and recall wiring
-- **Versioning** — whistle programs are text files you can diff, review, and roll back
+Whistle is a domain-specific language for expressing working animal infrastructure as code. A whistle program declares a breed (model), a pasture (PLATO room/workspace), a fence (conservation policy), a herd (data source), a rotation schedule, and recall triggers. These aren't metaphors — they're compiled into concrete configuration objects that companion tools consume.
 
-| System Prompt | Whistle |
-|---------------|---------|
-| 500-word paragraph | 7-line declaration |
-| No validation | Referential integrity checks |
-| Copy-paste between scripts | Versioned, importable programs |
-| Manual wiring to each service | One `compile()` call outputs all configs |
+The parser converts whistle source text into a `WhistleProgram` AST. The validator checks referential integrity — does the breed exist in the registry? Is the pasture defined? Is the fence policy file accessible? The compiler then produces a `CompiledConfig` dict with sections for PLATO, conservation, flux, schedule, and recall wiring. This is the same separation of concerns that makes Docker Compose work: declarative intent, compiled to concrete configuration, consumed by the runtime.
 
-## Installation
+## Install
 
 ```bash
 pip install whistle-dsl
 ```
 
-Requires Python 3.10+.
+For development:
+
+```bash
+git clone https://github.com/SuperInstance/whistle.git
+cd whistle
+pip install -e ".[dev]"
+```
 
 ## Quick Start
-
-Create a file `roundup.whistle`:
-
-```
-# Medical records review working animal
-whistle round_up_medical {
-    breed: "gpt-4o",
-    pasture: "medical-review",
-    fence: "conservation/budget_decay.bin",
-    herd: "medical-records",
-    rotate: every_30_min,
-    recall: on_alarm
-}
-```
-
-Compile it:
 
 ```python
 from whistle import parse, compile, validate
 
-source = open("roundup.whistle").read()
+source = '''
+whistle daily_roundup {
+  breed: "claude-3-opus",
+  pasture: "ops-review",
+  fence: "conservation/budget_decay.bin",
+  herd: "incident-reports",
+  rotate: every_1_hours,
+  recall: on_drift
+}
+'''
 
-program = parse(source)          # → WhistleProgram (AST)
-result = validate(program)       # → ValidationResult
+# Parse to AST
+program = parse(source)
+print(f"Program: {program.name}")
+print(f"Breed: {program.statements['breed'].value}")
 
+# Validate referential integrity
+result = validate(program)
 if result.valid:
-    config = compile(program)    # → deployment-ready config dict
-    print(config)
+    print("✓ All references valid")
 else:
     for err in result.errors:
-        print(f"  [{err.whistle}] {err.field}: {err.message}")
+        print(f"✗ {err}")
+
+# Compile to infrastructure configs
+config = compile(program)
+# config = {
+#   "plato": {"room": "ops-review", "mode": "auto"},
+#   "conservation": {"policy": "budget_decay.bin"},
+#   "flux": {"breed": "claude-3-opus"},
+#   "schedule": {"interval": 3600},
+#   "recall": {"trigger": "drift"}
+# }
 ```
 
-Or use the CLI:
+### CLI
 
 ```bash
 # Validate a whistle file
-whistle validate roundup.whistle
+whistle validate examples/medical.whistle
 
 # Compile to JSON
-whistle compile roundup.whistle --output medical-config.json
+whistle compile examples/medical.whistle --output medical.json
 
-# List known model breeds
+# List known breeds (pulls from breed-registry)
 whistle breeds
+
+# Watch a directory for .whistle files and auto-compile
+whistle watch ./policies/
 ```
 
 ## DSL Reference
 
-### Syntax
+### Keywords
 
-```
-whistle NAME {
-    field: value,
-    field: value,
-    ...
-}
-```
+| Keyword | Type | Description |
+|---------|------|-------------|
+| `breed` | string | Model identifier (`"gpt-4"`, `"claude-3-opus"`, etc.) |
+| `pasture` | string | PLATO room / conversation space to run in |
+| `fence` | string | Conservation policy file path |
+| `herd` | string | Data source / knowledge corpus |
+| `rotate` | schedule | Rotation interval (`every_30_min`, `every_2_hours`, ...) |
+| `recall` | trigger | Recall trigger (`on_alarm`, `on_drift`, `on_budget`) |
+| `flank` | string | Optional: side-runnable preprocessor |
+| `drive` | string | Optional: direction of work (`inbound`, `outbound`) |
+| `stock` | string | Optional: stock ratio for multi-breed ensembles |
 
-Comments start with `#`. Multiple `whistle` blocks per file are allowed — each compiles to a separate entry.
+### Schedule Helpers
 
-### Fields
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `breed` | string | **Yes** | Model identifier — must be a known breed or flagged as custom |
-| `pasture` | string | No | PLATO room / conversation space to run in (defaults to whistle name) |
-| `fence` | string | No | Conservation policy file path |
-| `herd` | string | No | Data source / knowledge corpus |
-| `rotate` | schedule | No | Rotation interval |
-| `recall` | trigger | No | Recall signal |
-| `flank` | string | No | Side-runnable preprocessor |
-| `drive` | string | No | Direction of work (`inbound` or `outbound`) |
-| `stock` | string/int | No | Stock ratio for multi-breed ensembles |
-
-### Schedule Syntax
-
-| Expression | Meaning |
-|------------|---------|
-| `every_30_min` | Every 30 minutes |
-| `every_2_hours` | Every 2 hours |
-| `every_day_at_09:00` | Daily at 09:00 |
+- `every_N_min` — every N minutes
+- `every_N_hours` — every N hours
+- `every_day_at_HH:MM` — daily at a specific time
 
 ### Recall Triggers
 
-| Trigger | Meaning |
-|---------|---------|
-| `on_alarm` | External alarm signal |
-| `on_drift` | Semantic drift detected |
-| `on_budget` | Budget threshold crossed |
+- `on_alarm` — external alarm signal
+- `on_drift` — semantic drift detected
+- `on_budget` — budget threshold crossed
 
-Any `on_*` identifier is accepted as a trigger.
+### Example Program
 
-### Known Breeds
+```
+whistle round_up_medical {
+  breed: "gpt-4",
+  pasture: "medical-review",
+  fence: "conservation/budget_decay.bin",
+  herd: "medical-records",
+  rotate: every_30_min,
+  recall: on_alarm,
+  flank: "preprocessor/intake-cleaner.py",
+  stock: "3:1:gpt-4:claude-3"
+}
+```
 
-| Breed | Provider | Context Window |
-|-------|----------|----------------|
-| `gpt-4` | OpenAI | 128,000 |
-| `gpt-4o` | OpenAI | 128,000 |
-| `gpt-4-turbo` | OpenAI | 128,000 |
-| `claude-3-opus` | Anthropic | 200,000 |
-| `claude-3-sonnet` | Anthropic | 200,000 |
-| `claude-3-haiku` | Anthropic | 200,000 |
-| `gemini-pro` | Google | 1,000,000 |
-| `gemini-1.5-pro` | Google | 2,000,000 |
-| `llama-3-70b` | Meta | 8,000 |
-| `mistral-large` | Mistral | 32,000 |
+## Compilation Targets
 
-Unknown breeds trigger a warning and are treated as custom models with default 8,192 context window.
+`compile()` produces a dict with sections consumed by companion repos:
+
+| Section | Consumer | What It Configures |
+|---------|----------|-------------------|
+| `plato` | [plato-core](https://github.com/SuperInstance/plato-core) | Room configuration, mode, capacity |
+| `conservation` | [conservation-enforcer](https://github.com/SuperInstance/conservation-enforcer) | Policy file, budget allocation |
+| `flux` | [flux-registry](https://github.com/SuperInstance/flux-registry) | Model routing, breed assignment |
+| `schedule` | Cron / interval scheduler | Rotation interval, timezone |
+| `recall` | Recall signal wiring | Trigger conditions, escalation chain |
 
 ## Architecture
 
 ```
- .whistle source
-       │
-       ▼
-┌─────────────┐
-│   Parser    │  ← hand-written tokenizer + recursive descent
-│             │     produces WhistleProgram AST
-└──────┬──────┘
-       │  WhistleProgram
-       ▼
-┌─────────────┐
-│  Validator  │  ← checks required fields, breed names,
-│             │     fence paths, schedule/trigger types
-└──────┬──────┘
-       │  ValidationResult (errors + warnings)
-       ▼
-┌─────────────┐
-│  Compiler   │  → transforms each WhistleStatement into
-│             │     a CompiledConfig with 5 target sections
-└─────────────┘
-```
-
-### Compilation Targets
-
-Each `whistle compile` produces a dict with these sections, consumed by companion services:
-
-| Section | Consumer | What It Contains |
-|---------|----------|------------------|
-| `plato` | PLATO room system | Room name, model, corpus, drive direction |
-| `conservation` | Conservation fence enforcer | Policy file, enforcer class, token limits |
-| `flux` | Flux model router | Breed, provider, context window, preprocessor |
-| `schedule` | Cron / interval scheduler | Rotation type, interval in seconds, raw expression |
-| `recall` | Recall signal handler | Trigger event, action (`halt_and_return`) |
-
-Example compiled output:
-
-```json
-{
-  "whistles": {
-    "round_up_medical": {
-      "name": "round_up_medical",
-      "plato": {
-        "room": "medical-review",
-        "model": "gpt-4o",
-        "corpus": "medical-records",
-        "drive": "inbound"
-      },
-      "conservation": {
-        "policy_file": "conservation/budget_decay.bin",
-        "enforcer": "conservation.BudgetDecay",
-        "defaults": { "max_tokens_per_turn": 4096 }
-      },
-      "flux": {
-        "breed": "gpt-4o",
-        "routing": {
-          "provider": "openai",
-          "family": "gpt-4o",
-          "context_window": 128000
-        }
-      },
-      "schedule": {
-        "type": "interval",
-        "interval_seconds": 1800,
-        "raw": "every_30_min"
-      },
-      "recall": {
-        "trigger": "alarm",
-        "action": "halt_and_return",
-        "raw": "on_alarm"
-      }
-    }
-  }
-}
+┌──────────────────────────────────────────────────────┐
+│                   Whistle Pipeline                     │
+│                                                       │
+│  Source Text ──▶ Parser ──▶ WhistleProgram (AST)     │
+│                                  │                    │
+│                                  ▼                    │
+│                            Validator                  │
+│                         (referential                  │
+│                          integrity)                   │
+│                                  │                    │
+│                                  ▼                    │
+│                            Compiler                   │
+│                                  │                    │
+│                    ┌─────────────┼──────────┐         │
+│                    ▼             ▼          ▼         │
+│               PLATO config  Fence config  Flux config │
+│               Schedule      Recall        Flank       │
+└──────────────────────────────────────────────────────┘
 ```
 
 ## API Reference
 
 ### `parse(source: str) -> WhistleProgram`
 
-Parse a whistle DSL source string into a `WhistleProgram` AST. Raises `SyntaxError` on malformed input.
+Parse whistle source text into a `WhistleProgram` AST.
 
 ### `validate(program: WhistleProgram) -> ValidationResult`
 
-Validate all whistle statements. Returns a `ValidationResult` with `valid: bool`, `errors: list[FieldIssue]` (blocking), and `warnings: list[FieldIssue]` (non-blocking).
+```python
+@dataclass
+class ValidationResult:
+    valid: bool
+    errors: list[str]
+    warnings: list[str]
+```
 
-### `compile(program: WhistleProgram) -> dict`
+### `compile(program: WhistleProgram) -> CompiledConfig`
 
-Compile a validated program into a deployment-ready config dict. Returns `{"whistles": {name: config_dict, ...}}`.
+```python
+@dataclass
+class CompiledConfig:
+    plato: dict         # room configuration
+    conservation: dict  # fence policy
+    flux: dict          # breed routing
+    schedule: dict      # rotation timing
+    recall: dict        # trigger wiring
 
-### `compile_one(stmt: WhistleStatement) -> CompiledConfig`
-
-Compile a single statement into a `CompiledConfig` with `.plato`, `.conservation`, `.flux`, `.schedule`, `.recall`, and `.raw` attributes.
-
-### CLI: `whistle`
-
-```bash
-whistle validate <file>          # Validate a .whistle file
-whistle compile <file> [-o OUT]  # Compile to JSON (stdout or file)
-whistle breeds                   # List known model breeds
+    def to_json(self) -> str
+    def to_dict(self) -> dict
 ```
 
 ## Testing
 
 ```bash
-git clone https://github.com/SuperInstance/whistle.git
-cd whistle
 pip install -e ".[dev]"
-pytest
+pytest tests/ -v
 
-# With coverage
-pytest --cov=whistle --cov-report=term-missing
+# Test specific modules
+pytest tests/test_parser.py -v
+pytest tests/test_compiler.py -v
+pytest tests/test_validator.py -v
 ```
+
+## Why Not Just System Prompts?
+
+| System Prompt | Whistle |
+|---------------|---------|
+| 500-word paragraph | 7-line declaration |
+| No validation | Referential integrity checks |
+| Copy-paste between scripts | Versioned, importable programs |
+| Manual wiring to infrastructure | Compiled to PLATO, flux, fences |
+| No type safety | Structured AST with typed fields |
+| Impossible to diff | Text-based, git-friendly |
+
+## Philosophy
+
+In working dog trials, the whistle is how the shepherd communicates intent. It's not a detailed instruction — it's a cue. The dog knows the terrain; the whistle tells it what the shepherd wants. Whistle (the DSL) works the same way: you state what you want (breed, pasture, fence, herd, rotation) and the system figures out the wiring. No more hand-editing YAML configs across five different services.
+
+For more on the working animal paradigm, see [AI-Writings](https://github.com/SuperInstance/AI-Writings).
 
 ## Ecosystem
 
 | Repo | Role |
 |------|------|
-| `SuperInstance/PLATO` | Conversation rooms & pastures (consumes `plato` config) |
-| `SuperInstance/conservation` | Budget / safety fences (consumes `conservation` config) |
-| `SuperInstance/flux` | Model routing & ensemble registry (consumes `flux` config) |
-| **`SuperInstance/whistle`** | **DSL compiler — this repo** |
-| `SuperInstance/baton` | Generational handoff between model lifecycles |
-| `SuperInstance/trawl` | Commercial fishing implementation |
-| `SuperInstance/a2ui` | Adaptive interface generation |
-| `SuperInstance/shepherds-console` | Operations dashboard |
-
-## Philosophy
-
-You don't explain a task to a sheepdog in a 500-word monologue. You give a cue — a whistle — and the dog understands the terrain. Whistle applies the same principle to LLM orchestration: the intent is small and precise, the infrastructure handles the rest.
-
-System prompts conflate *what the model should do* with *how the infrastructure should be configured*. Whistle separates them. Your `.whistle` file declares intent; the compiler wires it into every system that needs configuration. One source of truth, validated before deployment, diffable in version control.
+| **[whistle](https://github.com/SuperInstance/whistle)** | **This repo** — intent DSL |
+| [a2ui](https://github.com/SuperInstance/a2ui) | Adaptive interface (consumes whistle-compiled configs) |
+| [shepherds-console](https://github.com/SuperInstance/shepherds-console) | Dashboard (renders whistle-configured infrastructure) |
+| [conservation-enforcer](https://github.com/SuperInstance/conservation-enforcer) | The fence engine that whistle configures |
+| [plato-core](https://github.com/SuperInstance/plato-core) | The pasture engine that whistle configures |
+| [breed-registry](https://github.com/SuperInstance/breed-registry) | The breed catalog that whistle references |
 
 ## License
 
-MIT
+MIT — see [LICENSE](LICENSE).
