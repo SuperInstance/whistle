@@ -1,0 +1,13 @@
+# Incident Response — always-on watchdog
+# Monitors incident reports and alerts on drift.
+
+whistle incident_watchdog {
+    breed: "claude-3-opus",
+    pasture: "ops-briefing",
+    fence: "conservation/strict.bin",
+    herd: "incident-reports",
+    rotate: every_15_min,
+    recall: on_drift,
+    flank: "triage-preproc",
+    drive: "inbound"
+}
