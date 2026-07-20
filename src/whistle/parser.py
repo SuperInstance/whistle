@@ -89,10 +89,21 @@ _COMMENT_RE = re.compile(r"#.*$")
 
 
 def _strip_comments(source: str) -> str:
-    """Remove # comments."""
+    """Remove # comments, preserving # inside string literals."""
     lines = []
     for line in source.splitlines():
-        lines.append(_COMMENT_RE.sub("", line))
+        result = []
+        in_string = False
+        i = 0
+        while i < len(line):
+            ch = line[i]
+            if ch == '"' and (i == 0 or line[i-1] != '\\'):
+                in_string = not in_string
+            if ch == '#' and not in_string:
+                break  # rest is a comment
+            result.append(ch)
+            i += 1
+        lines.append(''.join(result))
     return "\n".join(lines)
 
 
